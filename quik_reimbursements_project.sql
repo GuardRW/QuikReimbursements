@@ -173,3 +173,148 @@ INSERT INTO reimbursement (reimbursement_id, amount, description, receipt, resol
 (9, 80.00, 'Dinner expenses during business trip', 'receipts/dinner_receipt.png', NULL, '2023-07-18', 10, 2, 1, NULL),
 (10, 40.00, 'Public transportation costs', 'receipts/transport_receipt.jpg', '2023-07-30', '2023-07-25', 7, 2, 10, 2);
 
+
+-- SQL Query 1: 
+-- Purpose: Fetch employee names and their relation to their departments and roles therein.
+-- Expected: A table containing attributes of employee names, roles, and department names.
+SELECT FIRST_NAME, LAST_NAME, ROLE_NAME AS 'IS THE', NAME AS 'OF' FROM DEPARTMENTS
+JOIN EMPLOYEES
+ON DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+JOIN EMPLOYEE_ROLES
+ON EMPLOYEES.ROLE_ID = EMPLOYEE_ROLES.ROLE_ID
+ORDER BY LAST_NAME
+;
+
+-- SQL Query 2: 
+-- Purpose: Fetch reimbursemnts of major amounts and their relevent information.
+-- Expected: A table containing attributes of significant reimbursement amount totals, status, id, and receipts.
+SELECT SUM(AMOUNT), STATUS_NAME, REIMBURSEMENT_ID, RECEIPT FROM reimbursement
+LEFT OUTER JOIN reimbursement_status
+ON reimbursement.status_id = reimbursement_status.status_id
+WHERE AMOUNT > ANY (
+SELECT AMOUNT FROM reimbursement
+JOIN reimbursement_status
+ON reimbursement.status_id = reimbursement_status.status_id
+WHERE STATUS_NAME = 'PENDING' AND AMOUNT < 100
+)
+GROUP BY STATUS_NAME, REIMBURSEMENT_ID, RECEIPT
+;
+
+-- SQL Query 3: 
+-- Purpose: Fetch employee names and the number of reimbursements that they have approved or denied.
+-- Expected: A table containing attributes of names of employees and the number of reimburesment determinations they have made.
+SELECT FIRST_NAME, LAST_NAME, (
+SELECT COUNT(*)
+FROM reimbursement AS re
+WHERE em.employee_id = re.resolver_id
+) AS 'Determinations made' 
+FROM EMPLOYEES AS em
+;
+
+-- SQL Query 4: 
+-- Purpose: Fetches a full outer join on the employee information related to every reimbursement.
+-- Expected: A table containing attributes of reimbursement ids, amounts, dates of submission, and statuses, and respective employee information of ids, names, and roles.
+SELECT reimbursement_id, amount, submitted, status_name, employee_id, first_name, last_name, role_id 
+FROM reimbursement 
+left join employees
+on resolver_id = employee_id
+join reimbursement_status
+on reimbursement.status_id = reimbursement_status.status_id
+union
+SELECT reimbursement_id, amount, submitted, status_name, employee_id, first_name, last_name, role_id 
+FROM reimbursement 
+right join employees
+on resolver_id = employee_id
+join reimbursement_status
+on reimbursement.status_id = reimbursement_status.status_id
+;
+
+-- SQL Query 5: 
+-- Purpose: Fetches the all of the employee data for an employee when logging in using username and password and checking its reserves of usernames and passwords for an intercecpt.
+-- johndoe used as example username.
+-- Expected: A single tuple containing all employee information except password.
+SELECT emp.FIRST_NAME, emp.LAST_NAME, emp.EMPLOYEE_ID, emp.EMAIL, emp.USER_NAME, cm.NAME AS 'COMPANY', dep.NAME AS 'DEPARTMENT', er.ROLE_NAME
+FROM EMPLOYEES emp
+JOIN EMPLOYEE_ROLES er
+ON emp.ROLE_ID = er.ROLE_ID
+JOIN DEPARTMENTS dep
+ON emp.DEPARTMENT_ID = dep.DEPARTMENT_ID
+JOIN COMPANY cm
+ON emp.COMPANY_ID = cm.COMPANY_ID
+WHERE (
+SELECT emp.user_name, emp.PASSWORD FROM EMPLOYEES emp
+WHERE emp.USER_NAME = 'johndoe'
+) = (
+SELECT user_name, PASSWORD FROM COMPANY cm
+INNER JOIN EMPLOYEES
+ON cm.COMPANY_ID = EMPLOYEES.EMPLOYEE_ID
+WHERE USER_NAME = 'johndoe'
+)
+AND emp.USER_NAME = 'johndoe'
+;
+
+-- SQL Query 6: 
+-- Purpose: Fetches the "My Reimbursements" information which includes the relevant reimbursement information, status, and employee action information.
+-- Expected: A table containing attributes of reimbursement descriptions, amounts, types, statuses, dates of submission, receipts, and whether they have been resolved and who resolved.
+SELECT DESCRIPTION, AMOUNT, TYPE_NAME AS 'TYPE', STATUS_NAME AS 'STATUS', SUBMITTED, RECEIPT, RESOLVED, ROLE_NAME AS 'RESOLVER'
+FROM REIMBURSEMENT
+JOIN REIMBURSEMENT_STATUS
+ON REIMBURSEMENT_STATUS.STATUS_ID = REIMBURSEMENT.STATUS_ID
+JOIN REIMBURSEMENT_TYPE
+ON REIMBURSEMENT_STATUS.STATUS_ID = REIMBURSEMENT.STATUS_ID
+JOIN EMPLOYEES
+ON REIMBURSEMENT.RESOLVER_ID = EMPLOYEES.EMPLOYEE_ID
+JOIN EMPLOYEE_ROLES
+ON EMPLOYEES.ROLE_ID = EMPLOYEE_ROLES.ROLE_ID
+;
+
+-- SQL Query 7: 
+-- Purpose: Fetches the number of employees that work in each department.
+-- Expected: A table containing attributes of department names and the total number of its workers.
+SELECT dep.NAME AS 'DEPARTMENT', concat('has ', (COUNT(*)), ' employees') AS 'Number of employees' 
+FROM EMPLOYEES
+JOIN DEPARTMENTS dep
+ON dep.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID
+GROUP BY dep.NAME
+;
+
+-- SQL Query 8: 
+-- Purpose: Fetches the number of employees that work for each company.
+-- Expected: A table containing attributes of company names and the total number of its employees.
+SELECT cm.NAME AS 'COMPANY', concat('has ', (COUNT(*)), ' employees') AS 'Number of employees' 
+FROM EMPLOYEES
+JOIN COMPANY cm
+ON cm.COMPANY_ID = EMPLOYEES.COMPANY_ID
+GROUP BY cm.NAME
+;
+
+-- SQL Query 9: 
+-- Purpose: Fetch employee names and the number of reimbursements they have approved along with the total amount reimbursed.
+-- Expected: A table containing attributes of employee names, ids, the number of approved reimbursements they have made, and the amount those reimbursements total to.
+SELECT FIRST_NAME, LAST_NAME, employee_id, (
+SELECT COUNT(*)
+FROM reimbursement AS re
+JOIN REIMBURSEMENT_STATUS rs
+ON re.STATUS_ID = rs.STATUS_ID
+WHERE em.employee_id = re.resolver_id
+AND STATUS_NAME = 'APPROVED'
+) AS 'Reimbursement approvals', (
+SELECT SUM(AMOUNT)
+FROM reimbursement AS re
+WHERE em.employee_id = re.resolver_id
+) AS 'Total reimbursed' 
+FROM EMPLOYEES AS em
+;
+
+-- SQL Query 10: 
+-- Purpose: Fetches company relations to its employees and departmants and their employee's roles.
+-- Expected: A table containing attributes of company names, employee names, department names, and role names.
+SELECT cm.NAME AS 'Company', CONCAT(FIRST_NAME, ' ', LAST_NAME) AS 'Employs', dep.NAME AS 'In', ROLE_NAME AS 'As a'
+FROM COMPANY cm
+JOIN EMPLOYEES
+ON cm.COMPANY_ID = EMPLOYEES.COMPANY_ID
+JOIN DEPARTMENTS dep
+ON EMPLOYEES.DEPARTMENT_ID = dep.DEPARTMENT_ID
+JOIN EMPLOYEE_ROLES
+ON EMPLOYEES.ROLE_ID = EMPLOYEE_ROLES.ROLE_ID
+;
